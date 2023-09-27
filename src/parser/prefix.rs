@@ -63,7 +63,7 @@ impl<T> PrefixTree<T> {
         node.value = Some(value);
     }
 
-    pub fn find(&self, prefix: &str) -> Option<(&PrefixNode<T>, usize)> {
-        self.root.find(prefix, 0)
+    pub fn find(&self, prefix: &str) -> Option<(&T, usize)> {
+        self.root.find(prefix, 0).map(|node| node.value)
     }
 }
