@@ -83,7 +83,7 @@ fn is_atom(ch: char) -> bool {
     }
 }
 
-pub fn extract_lines(src: &str) -> Vec<Vec<char>> {
+pub fn split_lines(src: &str) -> Vec<Vec<char>> {
     let mut lines = Vec::new();
     let mut line = Vec::new();
     for ch in src.chars() {
@@ -99,15 +99,11 @@ pub fn extract_lines(src: &str) -> Vec<Vec<char>> {
 
 impl Lexer {
     pub fn new(name: impl Into<Str>, src: &str) -> Lexer {
-        let lexer = Lexer {
-            lines: extract_lines(src),
+        Lexer {
+            lines: split_lines(src),
             pos: (0, 0).into(),
             name: name.into(),
-        };
-
-        println!("{:?}", lexer.lines);
-
-        lexer
+        }
     }
 
     fn get_char(&self) -> LexResult<char> {
@@ -140,26 +136,18 @@ impl Lexer {
 
     fn advance_pos(&mut self) -> Option<()> {
         let line = self.lines.get(self.pos.row)?;
-        if self.pos.col >= line.len() {
-            self.pos.increment_row();
+        if self.pos.col >= line.len() - 1 {
+            self.pos.col = 0;
+            self.pos.row += 1;
         } else {
-            self.pos.increment_row();
+            self.pos.col += 1;
         }
         Some(())
     }
 
     pub fn next_char(&mut self) -> LexResult<char> {
         let ch = self.get_char()?;
-
-        match ch {
-            '\n' => {
-                self.pos.increment_row();
-            }
-            _ => {
-                self.pos.increment_col();
-            }
-        }
-
+        self.advance_pos();
         Ok(ch)
     }
 
@@ -183,7 +171,6 @@ impl Lexer {
         while let Ok(ch) = self.next_char() {
             if !predicate(ch) {
                 self.decrement_pos();
-                // self.back
                 break;
             }
             value.push(ch);
