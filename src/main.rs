@@ -15,8 +15,7 @@ baz
 "#;
 
 fn main() {
-    println!("{:#?}", extract_lines(TEXT));
-    // let mut lexer = parser::Lexer::new("<stdin>", SOURCE);
-    // let res = lexer.try_parse_symbol();
-    // println!("{:?}", res);
+    let mut lexer = parser::Lexer::new("<stdin>", SOURCE);
+    let res = lexer.try_parse_symbol();
+    println!("{:?}", res);
 }

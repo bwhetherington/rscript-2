@@ -93,16 +93,21 @@ pub fn extract_lines(src: &str) -> Vec<Vec<char>> {
             line = Vec::new();
         }
     }
+    lines.push(line);
     lines
 }
 
 impl Lexer {
     pub fn new(name: impl Into<Str>, src: &str) -> Lexer {
-        Lexer {
+        let lexer = Lexer {
             lines: extract_lines(src),
             pos: (0, 0).into(),
             name: name.into(),
-        }
+        };
+
+        println!("{:?}", lexer.lines);
+
+        lexer
     }
 
     fn get_char(&self) -> LexResult<char> {
@@ -114,13 +119,36 @@ impl Lexer {
             .ok_or_else(|| LexError::EOF)
     }
 
-    fn advance_pos(&mut self) -> LexResult<()> {
-        let ch = self.get_char()?;
+    fn decrement_pos(&mut self) {
+        // If we are beyond the final line, move to last char
+        if self.pos.row >= self.lines.len() {
+            self.pos.row = self.lines.len() - 1;
+            self.pos.col = self.lines[self.pos.row].len() - 1;
+            return;
+        }
 
-        Ok(())
+        // Decrement line if we reach beginning of a line
+        if self.pos.col == 0 {
+            self.pos.row -= 1;
+            self.pos.col = self.lines[self.pos.row].len() - 1;
+            return;
+        }
+
+        // Otherwise just decrement column
+        self.pos.col -= 1;
     }
 
-    fn next_char(&mut self) -> LexResult<char> {
+    fn advance_pos(&mut self) -> Option<()> {
+        let line = self.lines.get(self.pos.row)?;
+        if self.pos.col >= line.len() {
+            self.pos.increment_row();
+        } else {
+            self.pos.increment_row();
+        }
+        Some(())
+    }
+
+    pub fn next_char(&mut self) -> LexResult<char> {
         let ch = self.get_char()?;
 
         match ch {
@@ -135,23 +163,14 @@ impl Lexer {
         Ok(ch)
     }
 
-    fn back_char(&mut self) {
-        // match self.get_char() {
-        //     Ok(ch) => {
-
-        //     }
-        // }
-        self.index = usize::max(0, self.index - 1);
-    }
-
     fn try_run<T>(&mut self, func: impl Fn(&mut Lexer) -> LexResult<T>) -> LexResult<T> {
-        let start_index = self.index;
+        let start_pos = self.pos.clone();
 
         let res = func(self);
 
         // Reset if there was an error
         if res.is_err() {
-            self.index = start_index;
+            self.pos = start_pos;
         }
 
         res
@@ -163,7 +182,7 @@ impl Lexer {
 
         while let Ok(ch) = self.next_char() {
             if !predicate(ch) {
-                self.index -= 1;
+                self.decrement_pos();
                 // self.back
                 break;
             }
