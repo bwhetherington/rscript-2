@@ -6,9 +6,8 @@ const SOURCE: &'static str = include_str!("../test.txt");
 
 use crate::parser::*;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let mut lexer = parser::Lexer::new("<stdin>", SOURCE);
-    let res = lexer.try_parse_symbol()?;
+    let res = lexer.try_parse_symbol();
     println!("{:?}", res);
-    Ok(())
 }

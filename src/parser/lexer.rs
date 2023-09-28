@@ -1,5 +1,7 @@
 use std::{collections::HashSet, sync::OnceLock};
 
+use regex::Regex;
+
 use crate::parser::{Point, PrefixTree, Span, SpanData, Str};
 
 #[derive(Clone, Debug)]
@@ -49,9 +51,21 @@ fn get_symbol_chars() -> &'static HashSet<char> {
     SYMBOL_CHARS.get_or_init(|| get_symbol_tree().get_all_chars())
 }
 
+fn is_whitespace_char(ch: char) -> bool {
+    match ch {
+        ' ' | '\t' | '\r' | '\n' => true,
+        _ => false,
+    }
+}
+
+fn is_word_char(ch: char) -> bool {
+    !(is_whitespace_char(ch) || get_symbol_chars().contains(&ch))
+}
+
 #[derive(Debug)]
 pub enum LexError {
     EOF,
+    ExpectedAtom,
     UnknownSymbol(Str),
     Custom(Str),
 }
@@ -74,13 +88,29 @@ pub struct Lexer {
     name: Str,
 }
 
-fn is_atom(ch: char) -> bool {
+fn is_atom_char(ch: char) -> bool {
     match ch {
         // Alphanumerics
         'a'..='z' | 'A'..='Z' | '0'..='9' => true,
 
         _ => false,
     }
+}
+
+static IDENTIFIER_REGEX: OnceLock<Regex> = OnceLock::new();
+
+fn get_identifier_regex() -> &'static Regex {
+    IDENTIFIER_REGEX.get_or_init(|| {
+        Regex::new(r"[a-zA-Z_][a-zA-Z0-9_]*").expect("failed to compile identifier regex")
+    })
+}
+
+static NUMBER_REGEX: OnceLock<Regex> = OnceLock::new();
+
+fn get_number_regex() -> &'static Regex {
+    NUMBER_REGEX.get_or_init(|| {
+        Regex::new(r"[0-9]*(\.[0-9]+)?").expect("failed to compile number regex")
+    })
 }
 
 pub fn split_lines(src: &str) -> Vec<Vec<char>> {
@@ -204,14 +234,31 @@ impl Lexer {
         })
     }
 
-    // fn try_parse_atom(&mut self) -> LexResult<SpanData<String>> {
-    //     self.try_run(|lexer| {})
-    // }
+    fn try_parse_atom(&mut self) -> LexResult<SpanData<String>> {
+        self.try_run(|lexer| {
+            let atom = lexer.read_while(is_atom_char);
+            if atom.value.is_empty() {
+                return Err(LexError::ExpectedAtom);
+            }
+            if get_atom_regex().
+            Ok(atom)
+        })
+    }
+
+    fn try_parse_char(&mut self, predicate: impl Fn(char) -> bool) -> Option<char> {
+        let ch = self.next_char().ok()?;
+        if predicate(ch) {
+            Some(ch)
+        } else {
+            self.decrement_pos();
+            None
+        }
+    }
 
     fn try_parse_number(&mut self) -> LexResult<SpanData<f64>> {
         self.try_run(|lexer| {
-            let mut string = String::new();
-            let ch = lexer.next_char()?;
+            let atom = self.try_parse_atom()?;
+
             Err(LexError::custom("foo"))
         })
     }
