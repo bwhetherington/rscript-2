@@ -1,39 +1,38 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use super::lexer::Token;
-
+#[derive(Debug)]
 struct PrefixNode<T> {
     value: Option<T>,
     children: HashMap<char, PrefixNode<T>>,
 }
 
 impl<T> PrefixNode<T> {
-    pub fn root() -> PrefixNode<T> {
+    fn root() -> PrefixNode<T> {
         PrefixNode {
             value: None,
             children: HashMap::new(),
         }
     }
 
-    pub fn new(value: Option<T>) -> PrefixNode<T> {
+    fn new(value: Option<T>) -> PrefixNode<T> {
         PrefixNode {
             value,
             children: HashMap::new(),
         }
     }
 
-    pub fn find(&self, prefix: &str, depth: usize) -> Option<(&PrefixNode<T>, usize)> {
+    fn find(&self, prefix: &str) -> Option<&PrefixNode<T>> {
         match prefix.chars().next() {
-            None => return Some((self, depth)),
+            None => return Some(self),
             Some(first_char) => {
                 let child = self.children.get(&first_char)?;
                 let slice = &prefix[1..];
-                child.find(slice, depth + 1)
+                child.find(slice)
             }
         }
     }
 
-    pub fn find_or_create(&mut self, prefix: &str) -> &mut PrefixNode<T> {
+    fn find_or_create(&mut self, prefix: &str) -> &mut PrefixNode<T> {
         match prefix.chars().next() {
             None => self,
             Some(first_char) => {
@@ -45,8 +44,16 @@ impl<T> PrefixNode<T> {
             }
         }
     }
+
+    fn add_all_chars_to_set(&self, set: &mut HashSet<char>) {
+        for (key, child) in &self.children {
+            set.insert(*key);
+            child.add_all_chars_to_set(set);
+        }
+    }
 }
 
+#[derive(Debug)]
 pub struct PrefixTree<T> {
     root: PrefixNode<T>,
 }
@@ -63,7 +70,26 @@ impl<T> PrefixTree<T> {
         node.value = Some(value);
     }
 
-    pub fn find(&self, prefix: &str) -> Option<(&T, usize)> {
-        self.root.find(prefix, 0).map(|node| node.value)
+    pub fn find(&self, prefix: &str) -> Option<&T> {
+        self.root.find(prefix).and_then(|node| {
+            let value = node.value.as_ref()?;
+            Some(value)
+        })
+    }
+
+    pub fn get_all_chars(&self) -> HashSet<char> {
+        let mut set = HashSet::new();
+        self.root.add_all_chars_to_set(&mut set);
+        set
+    }
+}
+
+impl<'a, T> FromIterator<(&'a str, T)> for PrefixTree<T> {
+    fn from_iter<I: IntoIterator<Item = (&'a str, T)>>(iter: I) -> PrefixTree<T> {
+        let mut tree = PrefixTree::new();
+        for (key, value) in iter.into_iter() {
+            tree.insert(key, value);
+        }
+        tree
     }
 }

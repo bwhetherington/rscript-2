@@ -1,4 +1,4 @@
-pub type Str = std::rc::Rc<str>;
+pub type Str = std::sync::Arc<str>;
 
 #[derive(Debug, Clone)]
 pub struct Point {
@@ -15,6 +15,10 @@ impl Point {
         self.col = 0;
         self.row += 1;
     }
+
+    pub fn as_tuple(&self) -> (usize, usize) {
+        (self.row, self.col)
+    }
 }
 
 impl From<(usize, usize)> for Point {
@@ -25,9 +29,9 @@ impl From<(usize, usize)> for Point {
 
 #[derive(Clone, Debug)]
 pub struct Span {
-    name: Str,
-    start: Point,
-    stop: Point,
+    pub name: Str,
+    pub start: Point,
+    pub stop: Point,
 }
 
 impl Span {
@@ -42,6 +46,6 @@ impl Span {
 
 #[derive(Debug)]
 pub struct SpanData<T> {
-    span: Span,
-    data: T,
+    pub span: Span,
+    pub value: T,
 }

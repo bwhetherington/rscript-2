@@ -1,6 +1,8 @@
-use crate::parser::{Point, Span, SpanData, Str};
+use std::{collections::HashSet, sync::OnceLock};
 
-#[derive(Debug)]
+use crate::parser::{Point, PrefixTree, Span, SpanData, Str};
+
+#[derive(Clone, Debug)]
 pub enum Token {
     Number(f64),
     Boolean(bool),
@@ -16,15 +18,49 @@ pub enum Token {
     Comma,
     Semicolon,
     Colon,
+    Equals,
+    DoubleEquals,
+}
+
+static SYMBOL_TREE: OnceLock<PrefixTree<Token>> = OnceLock::new();
+
+pub fn get_symbol_tree() -> &'static PrefixTree<Token> {
+    SYMBOL_TREE.get_or_init(|| {
+        PrefixTree::from_iter([
+            (".", Token::Period),
+            (",", Token::Comma),
+            (";", Token::Semicolon),
+            (":", Token::Colon),
+            ("(", Token::OpenParen),
+            (")", Token::CloseParen),
+            ("[", Token::OpenBracket),
+            ("]", Token::CloseBracket),
+            ("{", Token::OpenBrace),
+            ("}", Token::CloseBrace),
+            ("=", Token::Equals),
+            ("==", Token::DoubleEquals),
+        ])
+    })
+}
+
+static SYMBOL_CHARS: OnceLock<HashSet<char>> = OnceLock::new();
+
+fn get_symbol_chars() -> &'static HashSet<char> {
+    SYMBOL_CHARS.get_or_init(|| get_symbol_tree().get_all_chars())
 }
 
 #[derive(Debug)]
 pub enum LexError {
     EOF,
+    UnknownSymbol(Str),
     Custom(Str),
 }
 
 impl LexError {
+    pub fn unknown_symbol(msg: impl Into<Str>) -> LexError {
+        LexError::UnknownSymbol(msg.into())
+    }
+
     pub fn custom(msg: impl Into<Str>) -> LexError {
         LexError::Custom(msg.into())
     }
@@ -33,10 +69,9 @@ impl LexError {
 pub type LexResult<T> = Result<T, LexError>;
 
 pub struct Lexer {
-    chars: Vec<char>,
-    index: usize,
-    name: Str,
+    lines: Vec<Vec<char>>,
     pos: Point,
+    name: Str,
 }
 
 fn is_atom(ch: char) -> bool {
@@ -48,25 +83,44 @@ fn is_atom(ch: char) -> bool {
     }
 }
 
+pub fn extract_lines(src: &str) -> Vec<Vec<char>> {
+    let mut lines = Vec::new();
+    let mut line = Vec::new();
+    for ch in src.chars() {
+        line.push(ch);
+        if ch == '\n' {
+            lines.push(line);
+            line = Vec::new();
+        }
+    }
+    lines
+}
+
 impl Lexer {
     pub fn new(name: impl Into<Str>, src: &str) -> Lexer {
         Lexer {
-            chars: src.chars().collect(),
-            index: 0,
-            name: name.into(),
+            lines: extract_lines(src),
             pos: (0, 0).into(),
+            name: name.into(),
         }
     }
 
     fn get_char(&self) -> LexResult<char> {
-        self.chars
-            .get(self.index)
+        let (row, col) = self.pos.as_tuple();
+        self.lines
+            .get(row)
+            .and_then(|line| line.get(col))
             .cloned()
             .ok_or_else(|| LexError::EOF)
     }
 
+    fn advance_pos(&mut self) -> LexResult<()> {
+        let ch = self.get_char()?;
+
+        Ok(())
+    }
+
     fn next_char(&mut self) -> LexResult<char> {
-        self.index += 1;
         let ch = self.get_char()?;
 
         match ch {
@@ -81,6 +135,15 @@ impl Lexer {
         Ok(ch)
     }
 
+    fn back_char(&mut self) {
+        // match self.get_char() {
+        //     Ok(ch) => {
+
+        //     }
+        // }
+        self.index = usize::max(0, self.index - 1);
+    }
+
     fn try_run<T>(&mut self, func: impl Fn(&mut Lexer) -> LexResult<T>) -> LexResult<T> {
         let start_index = self.index;
 
@@ -92,6 +155,47 @@ impl Lexer {
         }
 
         res
+    }
+
+    fn read_while(&mut self, predicate: impl Fn(char) -> bool) -> SpanData<String> {
+        let start = self.pos.clone();
+        let mut value = String::new();
+
+        while let Ok(ch) = self.next_char() {
+            if !predicate(ch) {
+                self.index -= 1;
+                // self.back
+                break;
+            }
+            value.push(ch);
+        }
+
+        let stop = self.pos.clone();
+        let span = Span {
+            name: self.name.clone(),
+            start,
+            stop,
+        };
+        SpanData {
+            span,
+            value: value.into(),
+        }
+    }
+
+    pub fn try_parse_symbol(&mut self) -> LexResult<SpanData<Token>> {
+        self.try_run(|lexer| {
+            let tree = get_symbol_tree();
+            let symbols = get_symbol_chars();
+            let symbol_text = lexer.read_while(|ch| symbols.contains(&ch));
+            let symbol_token = tree
+                .find(&symbol_text.value)
+                .map(|token| token.clone())
+                .ok_or_else(|| LexError::unknown_symbol(symbol_text.value.as_str()))?;
+            Ok(SpanData {
+                span: symbol_text.span,
+                value: symbol_token,
+            })
+        })
     }
 
     // fn try_parse_atom(&mut self) -> LexResult<SpanData<String>> {
