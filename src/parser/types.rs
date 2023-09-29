@@ -44,8 +44,43 @@ impl Span {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SpanData<T> {
     pub span: Span,
     pub value: T,
+}
+
+pub enum Expression {
+    Number(f64),
+    String(Str),
+    Identifier(Str),
+}
+
+pub enum BinaryOp {
+    Plus,
+    Minus,
+    Times,
+    Divide,
+    Modulo,
+    Equals,
+    NotEquals,
+    LT,
+    LTE,
+    GT,
+    GTE,
+}
+
+pub enum Statement {
+    Declaration {
+        public: bool,
+        name: Str,
+        value: SpanData<Expression>,
+    },
+    Function {
+        public: bool,
+        name: Str,
+        args: Vec<Str>,
+        body: Vec<SpanData<Statement>>,
+    },
+    Expression(SpanData<Expression>),
 }

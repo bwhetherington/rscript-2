@@ -8,6 +8,6 @@ use crate::parser::*;
 
 fn main() {
     let mut lexer = parser::Lexer::new("<stdin>", SOURCE);
-    let res = lexer.try_parse_symbol();
-    println!("{:?}", res);
+    let res = lexer.try_parse_tokens();
+    println!("{:#?}", res);
 }
