@@ -50,6 +50,10 @@ pub struct SpanData<T> {
     pub value: T,
 }
 
+pub enum TypeExpression {
+    Identifier(Str),
+}
+
 pub enum Expression {
     Number(f64),
     String(Str),
@@ -70,6 +74,11 @@ pub enum BinaryOp {
     GTE,
 }
 
+pub struct Typed<T> {
+    type_value: TypeExpression,
+    value: T,
+}
+
 pub enum Statement {
     Declaration {
         public: bool,
@@ -79,7 +88,7 @@ pub enum Statement {
     Function {
         public: bool,
         name: Str,
-        args: Vec<Str>,
+        args: Vec<Typed<Str>>,
         body: Vec<SpanData<Statement>>,
     },
     Expression(SpanData<Expression>),

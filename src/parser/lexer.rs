@@ -21,6 +21,9 @@ pub enum Token {
     While,
     For,
     In,
+    Return,
+    Break,
+    Continue,
 
     // Symbol tokens
     ExclusiveRange,
@@ -53,6 +56,8 @@ pub enum Token {
     LTE,
     NotEquals,
     Not,
+    SingleArrow,
+    DoubleArrow,
 }
 
 static WORD_TREE: OnceLock<PrefixTree<Token>> = OnceLock::new();
@@ -69,6 +74,9 @@ fn get_word_tree() -> &'static PrefixTree<Token> {
             ("while", Token::While),
             ("for", Token::For),
             ("in", Token::In),
+            ("break", Token::Break),
+            ("continue", Token::Continue),
+            ("return", Token::Return),
         ])
     })
 }
@@ -89,7 +97,6 @@ pub fn get_symbol_tree() -> &'static PrefixTree<Token> {
             ("{", Token::OpenBrace),
             ("}", Token::CloseBrace),
             ("=", Token::Equals),
-
             ("+", Token::Plus),
             ("+=", Token::PlusEquals),
             ("-", Token::Minus),
@@ -100,7 +107,6 @@ pub fn get_symbol_tree() -> &'static PrefixTree<Token> {
             ("/=", Token::DivideEquals),
             ("%", Token::Modulo),
             ("%=", Token::ModuloEquals),
-
             (">", Token::GT),
             (">=", Token::GTE),
             ("<", Token::LT),
@@ -108,9 +114,10 @@ pub fn get_symbol_tree() -> &'static PrefixTree<Token> {
             ("==", Token::DoubleEquals),
             ("!=", Token::NotEquals),
             ("!", Token::Not),
-
             ("..", Token::ExclusiveRange),
             ("..=", Token::InclusiveRange),
+            ("->", Token::SingleArrow),
+            ("=>", Token::DoubleArrow),
         ])
     })
 }
@@ -180,9 +187,8 @@ fn get_identifier_regex() -> &'static Regex {
 static NUMBER_REGEX: OnceLock<Regex> = OnceLock::new();
 
 fn get_number_regex() -> &'static Regex {
-    NUMBER_REGEX.get_or_init(|| {
-        Regex::new(r"[0-9]*(\.[0-9]+)?").expect("failed to compile number regex")
-    })
+    NUMBER_REGEX
+        .get_or_init(|| Regex::new(r"[0-9]*(\.[0-9]+)?").expect("failed to compile number regex"))
 }
 
 fn is_whitespace(ch: char) -> bool {
@@ -352,7 +358,8 @@ impl Lexer {
             };
 
             // Check first character
-            let first_char = lexer.try_parse_char(is_atom_first_char)
+            let first_char = lexer
+                .try_parse_char(is_atom_first_char)
                 .ok_or_else(|| LexError::ExpectedAtom)?;
             res.value.push(first_char);
             res.span.stop = lexer.pos.clone();
@@ -410,9 +417,7 @@ impl Lexer {
                     lexer.decrement_pos();
                     Ok(())
                 }
-                Err(_) if !number.value.is_empty() => {
-                    Ok(())
-                }
+                Err(_) if !number.value.is_empty() => Ok(()),
                 Err(why) => Err(why),
             }?;
             let number_value: f64 = number.value.parse().map_err(|_| LexError::ExpectedNumber)?;
@@ -440,14 +445,14 @@ impl Lexer {
     fn next_token(&mut self) -> LexResult<Option<SpanData<Token>>> {
         self.skip_whitespace();
         if !self.is_done() {
-            let token = self.try_parse_atom()
+            let token = self
+                .try_parse_atom()
                 .or_else(|_| self.try_parse_number_token())
                 .or_else(|_| self.try_parse_symbol())?;
             Ok(Some(token))
         } else {
             Ok(None)
         }
-
     }
 
     pub fn try_parse_tokens(&mut self) -> LexResult<Vec<SpanData<Token>>> {
