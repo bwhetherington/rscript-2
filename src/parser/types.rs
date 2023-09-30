@@ -54,13 +54,7 @@ pub enum TypeExpression {
     Identifier(Str),
 }
 
-pub enum Expression {
-    Number(f64),
-    String(Str),
-    Identifier(Str),
-}
-
-pub enum BinaryOp {
+pub enum BinaryOperator {
     Plus,
     Minus,
     Times,
@@ -74,22 +68,88 @@ pub enum BinaryOp {
     GTE,
 }
 
+pub enum UnaryOperator {
+    Negative,
+    Not,
+}
+
+pub struct Unary {
+    operator: UnaryOperator,
+    target: Box<Expression>,
+}
+
+pub struct Binary {
+    operator: BinaryOperator,
+    lhs: Box<Expression>,
+    rhs: Box<Expression>,
+}
+
+pub struct Block {
+    body: Vec<SpanData<Statement>>,
+    value: Option<Box<Expression>>,
+}
+
+pub struct If {
+    condition: Box<Expression>,
+    then: Option<Block>,
+    otherwise: Option<Block>,
+}
+
+pub enum Expression {
+    Number(f64),
+    String(Str),
+    Identifier(Str),
+    Unary(Unary),
+    Binary(Binary),
+}
+
 pub struct Typed<T> {
-    type_value: TypeExpression,
+    type_expr: Option<TypeExpression>,
     value: T,
 }
 
+pub enum Visibility {
+    Public,
+    Private,
+}
+
+impl Visibility {
+    pub fn is_public(&self) -> bool {
+        match self {
+            Visibility::Public => true,
+            _ => false,
+        }
+    }
+}
+
+pub struct Declaration {
+    visibility: Visibility,
+    name: Typed<Str>,
+    value: SpanData<Expression>,
+}
+
+pub struct Function {
+    visibility: Visibility,
+    name: Str,
+    args: Vec<Typed<Str>>,
+    body: Block,
+}
+
 pub enum Statement {
-    Declaration {
-        public: bool,
-        name: Str,
-        value: SpanData<Expression>,
-    },
-    Function {
-        public: bool,
-        name: Str,
-        args: Vec<Typed<Str>>,
-        body: Vec<SpanData<Statement>>,
-    },
+    Declaration(Declaration),
+    Function(Function),
     Expression(SpanData<Expression>),
 }
+
+pub enum ParseError {
+    EOF,
+    Custom(Str),
+}
+
+impl ParseError {
+    pub fn custom(msg: impl Into<Str>) -> ParseError {
+        ParseError::Custom(msg.into())
+    }
+}
+
+pub type ParseResult<T> = Result<T, ParseError>;
