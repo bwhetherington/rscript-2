@@ -4,7 +4,7 @@ mod parser;
 
 const SOURCE: &str = include_str!("../test.txt");
 
-use crate::parser::*;
+use crate::parser::Lexer;
 
 fn main() {
     let mut lexer = Lexer::new("<stdin>", SOURCE);
