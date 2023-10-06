@@ -23,7 +23,7 @@ impl<T> PrefixNode<T> {
 
     fn find(&self, prefix: &str) -> Option<&PrefixNode<T>> {
         match prefix.chars().next() {
-            None => return Some(self),
+            None => Some(self),
             Some(first_char) => {
                 let child = self.children.get(&first_char)?;
                 let slice = &prefix[1..];

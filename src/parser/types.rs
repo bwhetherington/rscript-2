@@ -68,10 +68,10 @@ pub enum BinaryOp {
     Modulo,
     Equals,
     NotEquals,
-    LT,
-    LTE,
-    GT,
-    GTE,
+    LessThan,
+    LessThanEquals,
+    GreaterThan,
+    GreaterThanEquals,
 }
 
 pub struct Typed<T> {

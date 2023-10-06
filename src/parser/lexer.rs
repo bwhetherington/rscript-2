@@ -50,10 +50,10 @@ pub enum Token {
     DivideEquals,
     Modulo,
     ModuloEquals,
-    GT,
-    GTE,
-    LT,
-    LTE,
+    GreaterThan,
+    GreaterThanEquals,
+    LessThan,
+    LessThanEquals,
     NotEquals,
     Not,
     SingleArrow,
@@ -107,10 +107,10 @@ pub fn get_symbol_tree() -> &'static PrefixTree<Token> {
             ("/=", Token::DivideEquals),
             ("%", Token::Modulo),
             ("%=", Token::ModuloEquals),
-            (">", Token::GT),
-            (">=", Token::GTE),
-            ("<", Token::LT),
-            ("<=", Token::LTE),
+            (">", Token::GreaterThan),
+            (">=", Token::GreaterThanEquals),
+            ("<", Token::LessThan),
+            ("<=", Token::LessThanEquals),
             ("==", Token::DoubleEquals),
             ("!=", Token::NotEquals),
             ("!", Token::Not),
@@ -128,30 +128,17 @@ fn get_symbol_chars() -> &'static HashSet<char> {
     SYMBOL_CHARS.get_or_init(|| get_symbol_tree().get_all_chars())
 }
 
-fn is_whitespace_char(ch: char) -> bool {
-    match ch {
-        ' ' | '\t' | '\r' | '\n' => true,
-        _ => false,
-    }
-}
-
 fn is_atom_first_char(ch: char) -> bool {
-    match ch {
-        'a'..='z' | 'A'..='Z' | '_' => true,
-        _ => false,
-    }
+    ch.is_ascii_alphabetic() || ch == '_'
 }
 
 fn is_atom_char(ch: char) -> bool {
-    match ch {
-        '0'..='9' => true,
-        ch => is_atom_first_char(ch),
-    }
+    ch.is_ascii_digit() || is_atom_first_char(ch)
 }
 
 #[derive(Debug)]
 pub enum LexError {
-    EOF,
+    Eof,
     ExpectedNumber,
     ExpectedAtom,
     UnknownSymbol(Str),
@@ -192,10 +179,7 @@ fn get_number_regex() -> &'static Regex {
 }
 
 fn is_whitespace(ch: char) -> bool {
-    match ch {
-        '\t' | '\r' | '\n' | ' ' => true,
-        _ => false,
-    }
+    ch.is_whitespace()
 }
 
 fn not<T>(f: impl Fn(T) -> bool) -> impl Fn(T) -> bool {
@@ -203,10 +187,7 @@ fn not<T>(f: impl Fn(T) -> bool) -> impl Fn(T) -> bool {
 }
 
 fn is_numeric(ch: char) -> bool {
-    match ch {
-        '0'..='9' => true,
-        _ => false,
-    }
+    ch.is_ascii_digit()
 }
 
 pub fn split_lines(src: &str) -> Vec<Vec<char>> {
@@ -238,7 +219,7 @@ impl Lexer {
             .get(row)
             .and_then(|line| line.get(col))
             .cloned()
-            .ok_or_else(|| LexError::EOF)
+            .ok_or_else(|| LexError::Eof)
     }
 
     fn decrement_pos(&mut self) {
@@ -316,6 +297,37 @@ impl Lexer {
         res
     }
 
+    fn try_parse_string(&mut self) -> LexResult<SpanData<Token>> {
+        self.try_run(|lexer| {
+            let start = lexer.pos.clone();
+            lexer.try_parse_char(|ch| ch == '"')?;
+            let mut buf = String::new();
+
+            let mut prev_ch = '"';
+            while let Ok(ch) = lexer.next_char() {
+                match (prev_ch, ch) {
+                    ('\\', ch) => {
+                        buf.push(ch);
+                    }
+                    (_, '"') => {
+                        break;
+                    }
+                    (_, ch) => {
+                        buf.push(ch);
+                    }
+                }
+                prev_ch = ch;
+            }
+
+            let mut span = lexer.empty_span();
+            span.start = start;
+            Ok(SpanData {
+                span,
+                value: Token::String(buf.into()),
+            })
+        })
+    }
+
     fn try_parse_symbol(&mut self) -> LexResult<SpanData<Token>> {
         self.try_run(|lexer| {
             let tree = get_symbol_tree();
@@ -323,7 +335,7 @@ impl Lexer {
             let symbol_text = lexer.read_while(|ch| symbols.contains(&ch));
             let symbol_token = tree
                 .find(&symbol_text.value)
-                .map(|token| token.clone())
+                .cloned()
                 .ok_or_else(|| LexError::unknown_symbol(symbol_text.value.as_str()))?;
             Ok(SpanData {
                 span: symbol_text.span,
@@ -360,7 +372,7 @@ impl Lexer {
             // Check first character
             let first_char = lexer
                 .try_parse_char(is_atom_first_char)
-                .ok_or_else(|| LexError::ExpectedAtom)?;
+                .map_err(|_| LexError::ExpectedAtom)?;
             res.value.push(first_char);
             res.span.stop = lexer.pos.clone();
 
@@ -380,29 +392,25 @@ impl Lexer {
         })
     }
 
-    fn try_parse_char(&mut self, predicate: impl Fn(char) -> bool) -> Option<char> {
-        let ch = self.next_char().ok()?;
+    fn try_parse_char(&mut self, predicate: impl Fn(char) -> bool) -> LexResult<char> {
+        let ch = self.next_char()?;
         if predicate(ch) {
-            Some(ch)
+            Ok(ch)
         } else {
             self.decrement_pos();
-            None
+            Err(LexError::custom("character failed predicate"))
         }
     }
 
     fn try_parse_number(&mut self) -> LexResult<SpanData<f64>> {
         self.try_run(|lexer| {
-            let is_numeric = |ch| match ch {
-                '0'..='9' => true,
-                _ => false,
-            };
             let mut number = lexer.read_while(is_numeric);
             match lexer.next_char() {
                 Ok('.') => {
                     let post_decimal = lexer.read_while(is_numeric);
 
                     // Check if we find any numbers after the .
-                    if post_decimal.value.len() == 0 {
+                    if !post_decimal.value.is_empty() {
                         // If we didn't, then the . was not part of a decimal number
                         lexer.decrement_pos();
                         Ok(())
@@ -447,6 +455,7 @@ impl Lexer {
         if !self.is_done() {
             let token = self
                 .try_parse_atom()
+                .or_else(|_| self.try_parse_string())
                 .or_else(|_| self.try_parse_number_token())
                 .or_else(|_| self.try_parse_symbol())?;
             Ok(Some(token))
