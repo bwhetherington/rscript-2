@@ -1,4 +1,4 @@
-use crate::parser::{Expression, ParseError, ParseResult, SpanData, Statement, Token};
+use crate::parser::{Expression, ParseError, ParseResult, Span, SpanData, Statement, Token};
 
 pub struct AstParser {
     tokens: Vec<SpanData<Token>>,
@@ -32,7 +32,20 @@ impl AstParser {
     }
 
     fn parse_token(&mut self) -> ParseResult<SpanData<Token>> {
-        self.next_token().ok_or_else(|| ParseError::EOF)
+        self.next_token().ok_or_else(|| ParseError::ExpectedToken)
+    }
+
+    fn try_parse_token(
+        &mut self,
+        pred: impl Fn(&Token) -> bool,
+        why: &'static str,
+    ) -> ParseResult<SpanData<Token>> {
+        let token = self.parse_token()?;
+        if pred(&token.value) {
+            Ok(token)
+        } else {
+            Err(ParseError::custom(why))
+        }
     }
 
     fn try_parse_statement(&mut self) -> ParseResult<SpanData<Statement>> {
@@ -40,33 +53,42 @@ impl AstParser {
     }
 
     fn try_parse_expression(&mut self) -> ParseResult<SpanData<Expression>> {
-        self.try_parse_number_expression()
-            .or_else(|_| self.try_parse_identifier())
+        self.try_parse_token_expression()
     }
 
-    fn try_parse_number_expression(&mut self) -> ParseResult<SpanData<Expression>> {
+    fn try_parse_parentheses(&mut self) -> ParseResult<SpanData<Expression>> {
         self.try_run(|parser| {
-            let token = parser.parse_token()?;
-            match token.value {
-                Token::Number(n) => Ok(SpanData {
-                    span: token.span,
-                    value: Expression::Number(n),
-                }),
-                _ => Err(ParseError::custom("expected number")),
-            }
+            let start = parser.try_parse_token(
+                |token| matches!(token, Token::OpenParen),
+                "expected open paren",
+            )?;
+            let inner = parser.try_parse_expression()?;
+            let stop = parser.try_parse_token(
+                |token| matches!(token, Token::CloseParen),
+                "expected close paren",
+            )?;
+            Ok(SpanData {
+                span: start.span.to(&stop.span),
+                value: inner.value,
+            })
         })
     }
 
-    fn try_parse_identifier(&mut self) -> ParseResult<SpanData<Expression>> {
+    fn try_parse_token_expression(&mut self) -> ParseResult<SpanData<Expression>> {
         self.try_run(|parser| {
             let token = parser.parse_token()?;
-            match token.value {
-                Token::Identifier(ident) => Ok(SpanData {
-                    span: token.span,
-                    value: Expression::Identifier(ident),
-                }),
-                _ => Err(ParseError::custom("expected number")),
-            }
+            let expr = match token.value {
+                Token::Boolean(b) => Ok(Expression::Boolean(b)),
+                Token::Number(n) => Ok(Expression::Number(n)),
+                Token::String(s) => Ok(Expression::String(s)),
+                Token::Identifier(i) => Ok(Expression::Identifier(i)),
+                Token::None => Ok(Expression::None),
+                _ => Err(ParseError::ExpectedToken),
+            }?;
+            Ok(SpanData {
+                span: token.span,
+                value: expr,
+            })
         })
     }
 }

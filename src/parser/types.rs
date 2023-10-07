@@ -35,11 +35,19 @@ pub struct Span {
 }
 
 impl Span {
-    pub fn join(&self, other: &Span) -> Span {
+    pub fn from(&self, other: &Span) -> Span {
         Span {
             name: self.name.clone(),
             start: other.start.clone(),
             stop: self.stop.clone(),
+        }
+    }
+
+    pub fn to(&self, other: &Span) -> Span {
+        Span {
+            name: self.name.clone(),
+            start: self.start.clone(),
+            stop: other.stop.clone(),
         }
     }
 }
@@ -96,7 +104,9 @@ pub struct If {
 }
 
 pub enum Expression {
+    None,
     Number(f64),
+    Boolean(bool),
     String(Str),
     Identifier(Str),
     Unary(Unary),
@@ -143,6 +153,7 @@ pub enum Statement {
 
 pub enum ParseError {
     EOF,
+    ExpectedToken,
     Custom(Str),
 }
 

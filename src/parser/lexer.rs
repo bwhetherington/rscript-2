@@ -9,6 +9,7 @@ pub enum Token {
     Number(f64),
     Boolean(bool),
     String(Str),
+    None,
 
     // Word tokens
     Identifier(Str),
@@ -77,6 +78,9 @@ fn get_word_tree() -> &'static PrefixTree<Token> {
             ("break", Token::Break),
             ("continue", Token::Continue),
             ("return", Token::Return),
+            ("True", Token::Boolean(true)),
+            ("False", Token::Boolean(false)),
+            ("None", Token::None),
         ])
     })
 }
